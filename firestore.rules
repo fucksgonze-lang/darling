@@ -116,13 +116,19 @@ service cloud.firestore {
 
     function isValidPost(data) {
       return data.keys().hasAll(['authorId', 'authorUsername', 'authorName', 'mediaType', 'caption', 'likesCount', 'commentsCount', 'isReel', 'status', 'createdAt', 'updatedAt']) &&
-             data.keys().hasOnly(['authorId', 'authorUsername', 'authorName', 'authorAvatar', 'mediaType', 'mediaData', 'caption', 'location', 'likesCount', 'commentsCount', 'isReel', 'status', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['authorId', 'authorUsername', 'authorName', 'authorAvatar', 'mediaType', 'mediaData', 'videoUri', 'videoDurationMs', 'musicTrackId', 'musicTitle', 'musicArtist', 'muteOriginalAudio', 'caption', 'location', 'likesCount', 'commentsCount', 'isReel', 'status', 'createdAt', 'updatedAt']) &&
              data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
              data.authorUsername is string && data.authorUsername.size() >= 1 && data.authorUsername.size() <= 30 &&
              data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
              (!('authorAvatar' in data) || data.authorAvatar == null || (data.authorAvatar is string && data.authorAvatar.size() <= 450000)) &&
              data.mediaType in ['photo', 'video', 'text'] &&
              (!('mediaData' in data) || data.mediaData == null || (data.mediaData is string && data.mediaData.size() <= 450000)) &&
+             (!('videoUri' in data) || data.videoUri == null || (data.videoUri is string && data.videoUri.size() <= 1000)) &&
+             (!('videoDurationMs' in data) || data.videoDurationMs == null || (data.videoDurationMs is int && data.videoDurationMs >= 0 && data.videoDurationMs <= 3600000)) &&
+             (!('musicTrackId' in data) || data.musicTrackId == null || (data.musicTrackId is string && data.musicTrackId.size() <= 80)) &&
+             (!('musicTitle' in data) || data.musicTitle == null || (data.musicTitle is string && data.musicTitle.size() <= 100)) &&
+             (!('musicArtist' in data) || data.musicArtist == null || (data.musicArtist is string && data.musicArtist.size() <= 80)) &&
+             (!('muteOriginalAudio' in data) || data.muteOriginalAudio is bool) &&
              data.caption is string && data.caption.size() <= 2200 &&
              (!('location' in data) || data.location == null || (data.location is string && data.location.size() <= 100)) &&
              data.likesCount is int && data.likesCount >= 0 &&
@@ -421,8 +427,8 @@ service cloud.firestore {
     }
 
     match /follows/{followId} {
-      allow get: if isSignedIn() && isValidId(followId) && ((resource == null && isPairParticipant(followId)) || (resource != null && (existing().followerId == request.auth.uid || existing().targetId == request.auth.uid || isAdmin())));
-      allow list: if isSignedIn() && (resource.data.followerId == request.auth.uid || resource.data.targetId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(followId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && isValidId(followId) && isValidFollow(incoming()) && incoming().followerId == request.auth.uid && incoming().targetId != request.auth.uid;
       allow update: if false;
       allow delete: if isSignedIn() && isValidId(followId) && (existing().followerId == request.auth.uid || isAdmin());

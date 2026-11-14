@@ -1,6 +1,8 @@
 package com.example.ui.admin
 
 import android.app.Application
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,17 +10,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.GppBad
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwitchAccount
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,8 +58,10 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.R
 import com.example.data.model.UserPrivateProfile
+import com.example.data.model.UserRoles
 import com.example.data.repository.AdminRepository
 import com.example.ui.theme.AdminIndigo
+import com.example.ui.theme.StatusDanger
 import com.example.ui.viewmodel.AdminPanelViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 
@@ -64,6 +73,44 @@ fun AdminPanelScreen(
     onSwitchToUserFeed: () -> Unit,
     onSignOut: () -> Unit
 ) {
+    if (adminProfile.role != UserRoles.ADMIN) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+                .testTag("admin_access_denied_fallback"),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.GppBad,
+                    contentDescription = "Access Denied",
+                    tint = StatusDanger,
+                    modifier = Modifier.size(56.dp)
+                )
+                Text(
+                    text = "Access Restricted",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Administrator tools are strictly reserved for verified administrators.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(onClick = onSwitchToUserFeed) {
+                    Text("Return to App")
+                }
+            }
+        }
+        return
+    }
+
     val viewModel: AdminPanelViewModel = viewModel(
         key = "admin_$currentUserId",
         factory = viewModelFactory {

@@ -1,6 +1,6 @@
 {
   "name": "Darling Date",
-  "description": "Instagram-style social media and dating application with role-based User and Admin panels backed by Firebase Authentication and Cloud Firestore.",
+  "description": "Social media and dating application featuring vertical Reels, smart music matching, real-time messaging, and role-based User and Admin panels backed by Firebase Authentication and Cloud Firestore.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

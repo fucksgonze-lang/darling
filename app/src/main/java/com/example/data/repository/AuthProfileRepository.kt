@@ -350,7 +350,27 @@ class AuthProfileRepository(
                 .catch { error ->
                     val fsErr = unwrapFirestoreError(error)
                     if (fsErr == null && error is CancellationException) throw error
-                    if (auth.currentUser?.uid == userId) {
+                    if (auth.currentUser != null) {
+                        handleFirestoreError(fsErr ?: error, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    fun observeFollowerIds(userId: String): Flow<Set<String>> = flow {
+        val path = "follows"
+        emitAll(
+            db.collection(path)
+                .whereEqualTo("targetId", userId)
+                .snapshots()
+                .map { snap ->
+                    snap.documents.mapNotNull { it.getString("followerId") }.toSet()
+                }
+                .catch { error ->
+                    val fsErr = unwrapFirestoreError(error)
+                    if (fsErr == null && error is CancellationException) throw error
+                    if (auth.currentUser != null) {
                         handleFirestoreError(fsErr ?: error, OperationType.LIST, path)
                     }
                     throw error

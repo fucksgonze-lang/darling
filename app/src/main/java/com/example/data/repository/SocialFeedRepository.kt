@@ -95,11 +95,17 @@ class SocialFeedRepository(
         mediaType: String,
         mediaData: String?,
         location: String?,
-        isReel: Boolean
+        isReel: Boolean,
+        videoUri: String? = null,
+        videoDurationMs: Long? = null,
+        musicTrackId: String? = null,
+        musicTitle: String? = null,
+        musicArtist: String? = null,
+        muteOriginalAudio: Boolean = false
     ): Result<String> = runCatching {
         val uid = requireUserId()
-        require(caption.isNotBlank() || !mediaData.isNullOrBlank()) {
-            "Add a caption or select media before posting."
+        require(caption.isNotBlank() || !mediaData.isNullOrBlank() || !videoUri.isNullOrBlank()) {
+            "Add a caption or select photo/video before posting."
         }
         val postRef = db.collection("posts").document()
         val payload = mutableMapOf<String, Any>(
@@ -111,12 +117,18 @@ class SocialFeedRepository(
             "likesCount" to 0L,
             "commentsCount" to 0L,
             "isReel" to isReel,
+            "muteOriginalAudio" to muteOriginalAudio,
             "status" to ContentStatuses.ACTIVE,
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )
         author.avatarUrl?.takeIf { it.isNotBlank() }?.let { payload["authorAvatar"] = it }
         mediaData?.takeIf { it.isNotBlank() }?.let { payload["mediaData"] = it }
+        videoUri?.trim()?.takeIf { it.isNotBlank() }?.let { payload["videoUri"] = it.take(1000) }
+        videoDurationMs?.takeIf { it >= 0L }?.let { payload["videoDurationMs"] = it.coerceAtMost(3_600_000L) }
+        musicTrackId?.trim()?.takeIf { it.isNotBlank() }?.let { payload["musicTrackId"] = it.take(80) }
+        musicTitle?.trim()?.takeIf { it.isNotBlank() }?.let { payload["musicTitle"] = it.take(100) }
+        musicArtist?.trim()?.takeIf { it.isNotBlank() }?.let { payload["musicArtist"] = it.take(80) }
         location?.trim()?.takeIf { it.isNotBlank() }?.let { payload["location"] = it.take(100) }
 
         try {

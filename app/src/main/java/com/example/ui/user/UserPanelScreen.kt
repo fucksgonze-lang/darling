@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddBox
@@ -18,10 +20,13 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,14 +99,17 @@ fun UserPanelScreen(
         }
     )
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0=Feed, 1=Discover, 2=Messages, 3=Profile
+    var selectedTab by remember { mutableIntStateOf(0) } // 0=Feed, 1=Discover, 2=Reels, 3=Messages, 4=Profile
     var showCreateSheet by remember { mutableStateOf(false) }
     var createSheetMode by remember { mutableIntStateOf(0) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
+    var showExploreMembers by remember { mutableStateOf(false) }
     var activeChatPartner by remember { mutableStateOf<PublicProfile?>(null) }
+    var visitedProfileStack by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val postsState by viewModel.postsState.collectAsStateWithLifecycle()
     val profilesState by viewModel.profilesState.collectAsStateWithLifecycle()
+    val followingIds by viewModel.followingIds.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -117,8 +125,10 @@ fun UserPanelScreen(
         viewModel.clearMessage()
     }
 
-    val myPublicProfile = remember(profilesState, currentUserId, privateProfile) {
-        (profilesState as? UiState.Success)?.data?.firstOrNull { it.userId == currentUserId }
+    val allProfiles = (profilesState as? UiState.Success)?.data.orEmpty()
+
+    val myPublicProfile = remember(allProfiles, currentUserId, privateProfile) {
+        allProfiles.firstOrNull { it.userId == currentUserId }
             ?: PublicProfile(
                 id = currentUserId,
                 userId = currentUserId,
@@ -131,13 +141,23 @@ fun UserPanelScreen(
             )
     }
 
-    val navItems = listOf("Feed", "Discover", "Messages", "Profile")
+    val openUserProfile: (String) -> Unit = { targetId ->
+        if (targetId == currentUserId) {
+            visitedProfileStack = emptyList()
+            selectedTab = 4
+        } else if (visitedProfileStack.lastOrNull() != targetId) {
+            visitedProfileStack = visitedProfileStack + targetId
+        }
+    }
+
+    val navItems = listOf("Feed", "Discover", "Reels", "Messages", "Profile")
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWideScreen = maxWidth >= 680.dp
+        val isInDirectChat = selectedTab == 3 && activeChatPartner != null
 
         Scaffold(
-            contentWindowInsets = WindowInsets.safeDrawing,
+            contentWindowInsets = WindowInsets.systemBars,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
@@ -159,8 +179,14 @@ fun UserPanelScreen(
                     },
                     actions = {
                         IconButton(
+                            onClick = { showExploreMembers = true },
+                            modifier = Modifier.testTag("top_search_people_button")
+                        ) {
+                            Icon(Icons.Filled.Search, contentDescription = "Find & visit profiles")
+                        }
+                        IconButton(
                             onClick = {
-                                createSheetMode = 0
+                                createSheetMode = if (selectedTab == 2) 1 else 0
                                 showCreateSheet = true
                             },
                             modifier = Modifier.testTag("top_create_button")
@@ -179,7 +205,7 @@ fun UserPanelScreen(
                 )
             },
             bottomBar = {
-                if (!isWideScreen) {
+                if (!isWideScreen && !isInDirectChat) {
                     NavigationBar {
                         navItems.forEachIndexed { idx, label ->
                             val selected = selectedTab == idx
@@ -191,7 +217,8 @@ fun UserPanelScreen(
                                         imageVector = when (idx) {
                                             0 -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
                                             1 -> if (selected) Icons.Filled.Explore else Icons.Outlined.Explore
-                                            2 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
+                                            2 -> if (selected) Icons.Filled.PlayCircle else Icons.Outlined.PlayCircleOutline
+                                            3 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
                                             else -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
                                         },
                                         contentDescription = label
@@ -208,6 +235,8 @@ fun UserPanelScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding)
+                    .imePadding()
             ) {
                 if (isWideScreen) {
                     NavigationRail(modifier = Modifier.fillMaxHeight()) {
@@ -221,7 +250,8 @@ fun UserPanelScreen(
                                         imageVector = when (idx) {
                                             0 -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
                                             1 -> if (selected) Icons.Filled.Explore else Icons.Outlined.Explore
-                                            2 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
+                                            2 -> if (selected) Icons.Filled.PlayCircle else Icons.Outlined.PlayCircleOutline
+                                            3 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
                                             else -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
                                         },
                                         contentDescription = label
@@ -247,20 +277,34 @@ fun UserPanelScreen(
                                 createSheetMode = 2
                                 showCreateSheet = true
                             },
-                            onOpenEditProfile = { showEditProfileDialog = true }
+                            onOpenEditProfile = { showEditProfileDialog = true },
+                            onVisitUser = openUserProfile
                         )
                         1 -> UserDiscoverReelsTab(
                             currentUserId = currentUserId,
                             viewModel = viewModel,
                             onMessageMatch = { partner ->
                                 activeChatPartner = partner
-                                selectedTab = 2
-                            }
+                                selectedTab = 3
+                            },
+                            onOpenReels = { selectedTab = 2 },
+                            onVisitUser = openUserProfile
                         )
-                        2 -> UserMessagesTab(
+                        2 -> UserReelsTab(
+                            currentUserId = currentUserId,
+                            myPublicProfile = myPublicProfile,
+                            viewModel = viewModel,
+                            onOpenCreateReel = {
+                                createSheetMode = 1
+                                showCreateSheet = true
+                            },
+                            onVisitUser = openUserProfile
+                        )
+                        3 -> UserMessagesTab(
                             currentUserId = currentUserId,
                             activeChatPartner = activeChatPartner,
                             onSelectPartner = { activeChatPartner = it },
+                            onVisitUser = openUserProfile,
                             viewModel = viewModel
                         )
                         else -> UserProfileTab(
@@ -274,12 +318,44 @@ fun UserPanelScreen(
                             onOpenEditDialog = { showEditProfileDialog = true },
                             onRequestAdminPortal = onRequestAdminPortal,
                             onSignOut = onSignOut,
+                            onVisitUser = openUserProfile,
                             viewModel = viewModel
                         )
                     }
                 }
             }
         }
+
+        val currentVisitedUserId = visitedProfileStack.lastOrNull()
+        if (currentVisitedUserId != null) {
+            VisitedUserProfileOverlay(
+                currentUserId = currentUserId,
+                targetUserId = currentVisitedUserId,
+                myPublicProfile = myPublicProfile,
+                viewModel = viewModel,
+                onBack = { visitedProfileStack = visitedProfileStack.dropLast(1) },
+                onMessageUser = { partner ->
+                    visitedProfileStack = emptyList()
+                    activeChatPartner = partner
+                    selectedTab = 3
+                },
+                onVisitAnotherUser = openUserProfile
+            )
+        }
+    }
+
+    if (showExploreMembers) {
+        ExploreMembersSheet(
+            currentUserId = currentUserId,
+            allProfiles = allProfiles,
+            myFollowingIds = followingIds,
+            onDismiss = { showExploreMembers = false },
+            onFollowToggle = { viewModel.toggleFollow(it) },
+            onVisitUser = { uid ->
+                showExploreMembers = false
+                openUserProfile(uid)
+            }
+        )
     }
 
     if (showCreateSheet) {
@@ -288,8 +364,21 @@ fun UserPanelScreen(
             author = myPublicProfile,
             isBusy = isBusy,
             onDismiss = { showCreateSheet = false },
-            onPublishPostOrReel = { caption, mediaType, mediaData, location, isReel ->
-                viewModel.createPost(myPublicProfile, caption, mediaType, mediaData, location, isReel) {
+            onPublishPostOrReel = { caption, mediaType, mediaData, location, isReel, videoUri, videoDurationMs, musicTrackId, musicTitle, musicArtist, muteOriginalAudio ->
+                viewModel.createPost(
+                    author = myPublicProfile,
+                    caption = caption,
+                    mediaType = mediaType,
+                    mediaData = mediaData,
+                    location = location,
+                    isReel = isReel,
+                    videoUri = videoUri,
+                    videoDurationMs = videoDurationMs,
+                    musicTrackId = musicTrackId,
+                    musicTitle = musicTitle,
+                    musicArtist = musicArtist,
+                    muteOriginalAudio = muteOriginalAudio
+                ) {
                     showCreateSheet = false
                 }
             },

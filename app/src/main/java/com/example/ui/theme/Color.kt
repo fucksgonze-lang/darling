@@ -2,7 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Brand & Instagram-inspired Dating Palette
+// Brand & Darling Date Palette
 val DarlingRose = Color(0xFFFF2E7E)
 val DarlingCoral = Color(0xFFFF6B4A)
 val DarlingViolet = Color(0xFF7B2FF7)

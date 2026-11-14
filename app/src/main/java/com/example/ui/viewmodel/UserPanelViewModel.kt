@@ -115,6 +115,12 @@ class UserPanelViewModel(
         _mutualMatchProfile.value = null
     }
 
+    fun observeUserFollowingIds(userId: String): Flow<Set<String>> =
+        authRepo.observeFollowingIds(userId).catch { emit(emptySet()) }
+
+    fun observeUserFollowerIds(userId: String): Flow<Set<String>> =
+        authRepo.observeFollowerIds(userId).catch { emit(emptySet()) }
+
     fun toggleFollow(targetUserId: String) {
         val currentlyFollowing = followingIds.value.contains(targetUserId)
         viewModelScope.launch {
@@ -161,11 +167,30 @@ class UserPanelViewModel(
         mediaData: String?,
         location: String?,
         isReel: Boolean,
+        videoUri: String? = null,
+        videoDurationMs: Long? = null,
+        musicTrackId: String? = null,
+        musicTitle: String? = null,
+        musicArtist: String? = null,
+        muteOriginalAudio: Boolean = false,
         onSuccess: () -> Unit
     ) {
         viewModelScope.launch {
             _isBusy.value = true
-            val res = feedRepo.createPost(author, caption, mediaType, mediaData, location, isReel)
+            val res = feedRepo.createPost(
+                author = author,
+                caption = caption,
+                mediaType = mediaType,
+                mediaData = mediaData,
+                location = location,
+                isReel = isReel,
+                videoUri = videoUri,
+                videoDurationMs = videoDurationMs,
+                musicTrackId = musicTrackId,
+                musicTitle = musicTitle,
+                musicArtist = musicArtist,
+                muteOriginalAudio = muteOriginalAudio
+            )
             _isBusy.value = false
             res.onSuccess {
                 _actionMessage.value = if (isReel) "Reel published!" else "Post shared to feed!"

@@ -3,6 +3,7 @@ package com.example.data.model
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
 sealed interface UiState<out T> {
@@ -80,7 +81,7 @@ data class PublicProfile(
     val followersCount: Long = 0L,
     val followingCount: Long = 0L,
     val postsCount: Long = 0L,
-    val isVerified: Boolean = false,
+    @get:PropertyName("isVerified") @set:PropertyName("isVerified") var isVerified: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -94,11 +95,17 @@ data class Post(
     val authorAvatar: String? = null,
     val mediaType: String = "photo",
     val mediaData: String? = null,
+    val videoUri: String? = null,
+    val videoDurationMs: Long? = null,
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val muteOriginalAudio: Boolean = false,
     val caption: String = "",
     val location: String? = null,
     val likesCount: Long = 0L,
     val commentsCount: Long = 0L,
-    val isReel: Boolean = false,
+    @get:PropertyName("isReel") @set:PropertyName("isReel") var isReel: Boolean = false,
     val status: String = ContentStatuses.ACTIVE,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null

@@ -79,7 +79,9 @@ import com.example.ui.viewmodel.UserPanelViewModel
 fun UserDiscoverReelsTab(
     currentUserId: String,
     viewModel: UserPanelViewModel,
-    onMessageMatch: (PublicProfile) -> Unit
+    onMessageMatch: (PublicProfile) -> Unit,
+    onOpenReels: () -> Unit = {},
+    onVisitUser: (String) -> Unit
 ) {
     var selectedSegment by remember { mutableIntStateOf(0) } // 0 = Dating, 1 = Reels
     val profilesState by viewModel.profilesState.collectAsStateWithLifecycle()
@@ -149,14 +151,14 @@ fun UserDiscoverReelsTab(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "New people join Darling Date every day. Check your Matches & Messages or browse Reels.",
+                            text = "New people join Darling Date every day. Check your Matches & Messages or watch Reels.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        ElevatedButton(onClick = { selectedSegment = 1 }) {
+                        ElevatedButton(onClick = onOpenReels) {
                             Icon(Icons.Filled.Refresh, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Explore Reels")
+                            Text("Watch Reels")
                         }
                     }
                 }
@@ -196,6 +198,24 @@ fun UserDiscoverReelsTab(
                                         )
                                     )
                             )
+                            Surface(
+                                onClick = { onVisitUser(topProfile.userId) },
+                                color = Color.Black.copy(alpha = 0.55f),
+                                shape = RoundedCornerShape(50),
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(14.dp)
+                                    .testTag("discover_view_profile_button")
+                            ) {
+                                Text(
+                                    text = "View Full Profile",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                                )
+                            }
+
                             IconButton(
                                 onClick = { reportTarget = Triple("user", topProfile.userId, topProfile.userId) },
                                 modifier = Modifier
@@ -326,6 +346,7 @@ fun UserDiscoverReelsTab(
                         ReelShowcaseCard(
                             reel = reel,
                             isLiked = likedIds.contains(reel.id),
+                            onAuthorClick = { onVisitUser(reel.authorId) },
                             onLike = { viewModel.toggleLike(reel.id) },
                             onReport = { reportTarget = Triple("reel", reel.id, reel.authorId) }
                         )
@@ -378,6 +399,7 @@ fun UserDiscoverReelsTab(
 private fun ReelShowcaseCard(
     reel: Post,
     isLiked: Boolean,
+    onAuthorClick: () -> Unit,
     onLike: () -> Unit,
     onReport: () -> Unit
 ) {
@@ -428,9 +450,26 @@ private fun ReelShowcaseCard(
                     .fillMaxWidth(0.8f),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AvatarCircle(avatarUrl = reel.authorAvatar, displayName = reel.authorName, size = 34.dp)
-                    Text("@${reel.authorUsername}", color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.2f))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    AvatarCircle(
+                        avatarUrl = reel.authorAvatar,
+                        displayName = reel.authorName,
+                        size = 34.dp,
+                        onClick = onAuthorClick
+                    )
+                    TextButton(
+                        onClick = onAuthorClick,
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text("@${reel.authorUsername}", color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    }
                 }
                 Text(reel.caption, color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }

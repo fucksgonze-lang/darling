@@ -165,7 +165,7 @@ fun LoginScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Sign in securely with your Google account. Returning users go straight to their Feed; verified administrators are routed to the Admin Dashboard.",
+                        text = "Sign in with your Google account to share photos and Reels with smart background music, discover matches, and chat in real time.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -332,7 +332,7 @@ fun LoginScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Protected by Firebase Auth & Role Security",
+                            text = "Protected by Google Sign-In & Privacy Controls",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -346,11 +346,11 @@ fun LoginScreen(
         AlertDialog(
             onDismissRequest = { showSecurityInfoDialog = false },
             icon = { Icon(Icons.Filled.Info, contentDescription = null, tint = DarlingRose) },
-            title = { Text("Authentication & Role Security") },
+            title = { Text("Privacy & Account Security") },
             text = {
                 Text(
-                    "Darling Date authenticates exclusively via Google Sign-In (Jetpack Credential Manager) and Firebase Authentication. " +
-                        "Account roles ('user' vs 'admin') are verified server-side via Firestore Security Rules and protected admin grants—never modifiable from client code.",
+                    "Darling Date uses Google Sign-In to keep your account protected without extra passwords. " +
+                        "Your personal details stay private, while your posts, Reels, matches, and messages sync safely in real time.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },

@@ -44,12 +44,14 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -122,7 +124,7 @@ fun GuestPreviewScreen(
     onToggleDarkTheme: () -> Unit,
     onSignInRequested: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) } // 0=Feed, 1=Discover, 2=Messages, 3=Profile
+    var selectedTab by remember { mutableIntStateOf(0) } // 0=Feed, 1=Discover, 2=Reels, 3=Messages, 4=Profile
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -132,7 +134,7 @@ fun GuestPreviewScreen(
         }
     }
 
-    val navItems = listOf("Feed", "Discover", "Messages", "Profile")
+    val navItems = listOf("Feed", "Discover", "Reels", "Messages", "Profile")
 
     BoxWithConstraints(
         modifier = Modifier
@@ -205,7 +207,8 @@ fun GuestPreviewScreen(
                                         imageVector = when (idx) {
                                             0 -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
                                             1 -> if (selected) Icons.Filled.Explore else Icons.Outlined.Explore
-                                            2 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
+                                            2 -> if (selected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
+                                            3 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
                                             else -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
                                         },
                                         contentDescription = label
@@ -235,7 +238,8 @@ fun GuestPreviewScreen(
                                         imageVector = when (idx) {
                                             0 -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
                                             1 -> if (selected) Icons.Filled.Explore else Icons.Outlined.Explore
-                                            2 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
+                                            2 -> if (selected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
+                                            3 -> if (selected) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline
                                             else -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
                                         },
                                         contentDescription = label
@@ -251,8 +255,13 @@ fun GuestPreviewScreen(
                     PreviewBanner(onSignInRequested = onSignInRequested)
                     when (selectedTab) {
                         0 -> FeedFeaturePreview(onPromptSignUp = promptSignUp, onSignInRequested = onSignInRequested)
-                        1 -> DiscoverReelsFeaturePreview(onPromptSignUp = promptSignUp, onSignInRequested = onSignInRequested)
-                        2 -> MessagesFeaturePreview(onSignInRequested = onSignInRequested)
+                        1 -> DiscoverReelsFeaturePreview(
+                            onPromptSignUp = promptSignUp,
+                            onOpenReelsTab = { selectedTab = 2 },
+                            onSignInRequested = onSignInRequested
+                        )
+                        2 -> ReelsFeaturePreview(onSignInRequested = onSignInRequested)
+                        3 -> MessagesFeaturePreview(onSignInRequested = onSignInRequested)
                         else -> ProfileFeaturePreview(
                             isDarkTheme = isDarkTheme,
                             onToggleDarkTheme = onToggleDarkTheme,
@@ -326,8 +335,8 @@ private fun FeedFeaturePreview(
         listOf(
             FeaturePreviewItem(
                 id = "feed_social",
-                title = "Instagram-Style Social Feed",
-                subtitle = "Share photos, captions, and location tags with followers in real time.",
+                title = "Live Social Feed & Moments",
+                subtitle = "Share photos, videos, captions, and location tags with followers in real time.",
                 badge = "Social Feed",
                 highlights = listOf("Likes & real-time counters", "Nested comments", "Private bookmarks"),
                 gradient = listOf(DarlingViolet, DarlingRose)
@@ -520,6 +529,7 @@ private fun FeedFeaturePreview(
 @Composable
 private fun DiscoverReelsFeaturePreview(
     onPromptSignUp: (String) -> Unit,
+    onOpenReelsTab: () -> Unit,
     onSignInRequested: () -> Unit
 ) {
     var segment by remember { mutableIntStateOf(0) }
@@ -696,7 +706,7 @@ private fun DiscoverReelsFeaturePreview(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Watch and publish vertical short-form clips with captions, likes, comments, and safety reporting.",
+                                text = "Watch and publish vertical video clips with smart background music suggestions.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White.copy(alpha = 0.92f),
                                 textAlign = TextAlign.Center
@@ -708,15 +718,77 @@ private fun DiscoverReelsFeaturePreview(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Button(
-                            onClick = onSignInRequested,
+                            onClick = onOpenReelsTab,
                             colors = ButtonDefaults.buttonColors(containerColor = DarlingRose),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Sign Up to Browse & Post Reels")
+                            Text("Explore Reels Feature")
+                        }
+                        OutlinedButton(
+                            onClick = onSignInRequested,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Sign Up to Publish Reels")
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReelsFeaturePreview(onSignInRequested: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.2f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(DarlingGradientBrush),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayCircleFilled,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(68.dp)
+                )
+                Text(
+                    text = "Vertical Video Reels + Music",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Upload videos from your gallery, get automatic background music recommendations matched to your clip mood, mute or mix original audio, and swipe full-screen Reels.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.94f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = onSignInRequested,
+            colors = ButtonDefaults.buttonColors(containerColor = DarlingRose),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+        ) {
+            Text("Sign Up to Watch & Upload Reels")
         }
     }
 }

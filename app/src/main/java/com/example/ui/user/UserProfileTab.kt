@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
@@ -41,7 +43,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -65,12 +69,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.Post
 import com.example.data.model.PublicProfile
 import com.example.data.model.UiState
 import com.example.data.model.UserPrivateProfile
 import com.example.data.util.MediaHelper
 import com.example.ui.components.AvatarCircle
 import com.example.ui.components.DarlingMediaImage
+import com.example.ui.components.ReportDialog
 import com.example.ui.components.StatusPill
 import com.example.ui.theme.AdminIndigo
 import com.example.ui.theme.DarlingGradientBrush
@@ -78,7 +84,7 @@ import com.example.ui.theme.DarlingRose
 import com.example.ui.theme.DarlingSoftLavender
 import com.example.ui.viewmodel.UserPanelViewModel
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileTab(
     privateProfile: UserPrivateProfile,
@@ -91,13 +97,24 @@ fun UserProfileTab(
     onOpenEditDialog: () -> Unit,
     onRequestAdminPortal: () -> Unit,
     onSignOut: () -> Unit,
+    onVisitUser: (String) -> Unit,
     viewModel: UserPanelViewModel
 ) {
     val postsState by viewModel.postsState.collectAsStateWithLifecycle()
+    val profilesState by viewModel.profilesState.collectAsStateWithLifecycle()
+    val likedIds by viewModel.likedPostIds.collectAsStateWithLifecycle()
     val savedIds by viewModel.savedPostIds.collectAsStateWithLifecycle()
+    val myFollowingIds by viewModel.followingIds.collectAsStateWithLifecycle()
+    val myFollowerIds by viewModel.observeUserFollowerIds(privateProfile.userId)
+        .collectAsStateWithLifecycle(initialValue = emptySet())
     val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Posts, 1 = Reels, 2 = Saved
+    var followListMode by remember { mutableStateOf<FollowListMode?>(null) }
+    var selectedPost by remember { mutableStateOf<Post?>(null) }
+    var commentsTargetPost by remember { mutableStateOf<Post?>(null) }
+    var reportTarget by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
 
+    val allProfiles = (profilesState as? UiState.Success)?.data.orEmpty()
     val allPosts = (postsState as? UiState.Success)?.data.orEmpty()
     val myPosts = remember(allPosts, privateProfile.userId) {
         allPosts.filter { it.authorId == privateProfile.userId && !it.isReel }
@@ -138,9 +155,19 @@ fun UserProfileTab(
                         modifier = Modifier.weight(1f),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        ProfileStat("${myPosts.size + myReels.size}", "Posts")
-                        ProfileStat("${publicProfile?.followersCount ?: 0}", "Followers")
-                        ProfileStat("${publicProfile?.followingCount ?: 0}", "Following")
+                        ClickableProfileStat("${myPosts.size + myReels.size}", "Posts")
+                        ClickableProfileStat(
+                            count = "${maxOf((publicProfile?.followersCount ?: 0L).toInt(), myFollowerIds.size)}",
+                            label = "Followers",
+                            testTag = "my_followers_stat",
+                            onClick = { followListMode = FollowListMode.FOLLOWERS }
+                        )
+                        ClickableProfileStat(
+                            count = "${maxOf((publicProfile?.followingCount ?: 0L).toInt(), myFollowingIds.size)}",
+                            label = "Following",
+                            testTag = "my_following_stat",
+                            onClick = { followListMode = FollowListMode.FOLLOWING }
+                        )
                     }
                 }
 
@@ -152,7 +179,7 @@ fun UserProfileTab(
                         fontWeight = FontWeight.Bold
                     )
                     StatusPill(
-                        label = privateProfile.role.uppercase(),
+                        label = if (isServerVerifiedAdmin) "ADMIN" else "18+ MEMBER",
                         textColor = if (isServerVerifiedAdmin) AdminIndigo else DarlingRose,
                         backgroundColor = if (isServerVerifiedAdmin) DarlingSoftLavender else MaterialTheme.colorScheme.primaryContainer
                     )
@@ -210,34 +237,34 @@ fun UserProfileTab(
                             Switch(checked = isDarkTheme, onCheckedChange = { onToggleDarkTheme() })
                         }
 
-                        HorizontalDivider()
+                        if (isServerVerifiedAdmin) {
+                            HorizontalDivider()
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable(onClick = onRequestAdminPortal)
-                                .padding(vertical = 8.dp)
-                                .testTag("admin_portal_entry_button"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Filled.AdminPanelSettings, contentDescription = null, tint = AdminIndigo)
-                                Column {
-                                    Text(
-                                        text = if (isServerVerifiedAdmin) "Open Admin Dashboard" else "Admin Portal",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = if (isServerVerifiedAdmin) "Server-verified administrator access" else "Protected administrator route",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(onClick = onRequestAdminPortal)
+                                    .padding(vertical = 8.dp)
+                                    .testTag("admin_portal_entry_button"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Filled.AdminPanelSettings, contentDescription = null, tint = AdminIndigo)
+                                    Column {
+                                        Text(
+                                            text = "Open Admin Dashboard",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Administrator controls",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
-                            }
-                            if (isServerVerifiedAdmin) {
                                 Icon(Icons.Filled.Verified, contentDescription = null, tint = AdminIndigo)
                             }
                         }
@@ -296,6 +323,7 @@ fun UserProfileTab(
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(1f)
+                                .clickable { selectedPost = post }
                         ) {
                             if (!post.mediaData.isNullOrBlank()) {
                                 DarlingMediaImage(
@@ -330,6 +358,137 @@ fun UserProfileTab(
         }
     }
 
+    followListMode?.let { mode ->
+        FollowListBottomSheet(
+            title = if (mode == FollowListMode.FOLLOWERS) "Followers" else "Following",
+            userIds = if (mode == FollowListMode.FOLLOWERS) myFollowerIds else myFollowingIds,
+            currentUserId = privateProfile.userId,
+            myFollowingIds = myFollowingIds,
+            allProfiles = allProfiles,
+            onDismiss = { followListMode = null },
+            onFollowToggle = { viewModel.toggleFollow(it) },
+            onVisitUser = { uid ->
+                followListMode = null
+                if (uid != privateProfile.userId) {
+                    onVisitUser(uid)
+                }
+            }
+        )
+    }
+
+    selectedPost?.let { post ->
+        val freshPost = allPosts.firstOrNull { it.id == post.id } ?: post
+        PostDetailDialog(
+            post = freshPost,
+            isOwnPost = freshPost.authorId == privateProfile.userId,
+            isLiked = likedIds.contains(freshPost.id),
+            isSaved = savedIds.contains(freshPost.id),
+            onDismiss = { selectedPost = null },
+            onAuthorClick = {
+                if (freshPost.authorId != privateProfile.userId) {
+                    selectedPost = null
+                    onVisitUser(freshPost.authorId)
+                }
+            },
+            onLikeClick = { viewModel.toggleLike(freshPost.id) },
+            onCommentClick = { commentsTargetPost = freshPost },
+            onBookmarkClick = { viewModel.toggleBookmark(freshPost.id) },
+            onDeleteClick = {
+                viewModel.deleteOwnPost(freshPost.id)
+                selectedPost = null
+            },
+            onReportClick = {
+                reportTarget = Triple(if (freshPost.isReel) "reel" else "post", freshPost.id, freshPost.authorId)
+            }
+        )
+    }
+
+    commentsTargetPost?.let { targetPost ->
+        val comments by viewModel.observeComments(targetPost.id)
+            .collectAsStateWithLifecycle(initialValue = emptyList())
+        var commentText by remember { mutableStateOf("") }
+        val myAuthor = publicProfile ?: PublicProfile(
+            id = privateProfile.userId,
+            userId = privateProfile.userId,
+            fullName = privateProfile.fullName,
+            username = privateProfile.username,
+            avatarUrl = privateProfile.avatarUrl
+        )
+
+        ModalBottomSheet(onDismissRequest = { commentsTargetPost = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Comments (${comments.size})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(comments, key = { it.id }) { comment ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    commentsTargetPost = null
+                                    if (comment.authorId != privateProfile.userId) onVisitUser(comment.authorId)
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            AvatarCircle(avatarUrl = comment.authorAvatar, displayName = comment.authorUsername, size = 32.dp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("@${comment.authorUsername}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text(comment.text, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = commentText,
+                        onValueChange = { commentText = it.take(500) },
+                        placeholder = { Text("Add a comment...") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = {
+                            if (commentText.isNotBlank()) {
+                                viewModel.addComment(targetPost.id, myAuthor, commentText)
+                                commentText = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send comment", tint = DarlingRose)
+                    }
+                }
+            }
+        }
+    }
+
+    reportTarget?.let { (type, id, authorId) ->
+        ReportDialog(
+            targetLabel = type.replaceFirstChar { it.uppercase() },
+            onDismiss = { reportTarget = null },
+            onSubmit = { reason, details ->
+                viewModel.submitReport(type, id, null, authorId, reason, details)
+                reportTarget = null
+            }
+        )
+    }
+
     if (showEditDialog) {
         EditProfileDialog(
             privateProfile = privateProfile,
@@ -342,14 +501,6 @@ fun UserProfileTab(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun ProfileStat(count: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(count, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

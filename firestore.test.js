@@ -267,3 +267,106 @@ test("Posts & query alignment: active query succeeds, unfiltered query fails for
   );
   await assertFails(aliceDb.collection("posts").get());
 });
+
+test("Follows: any signed-in user can inspect followers/following lists, but only follower can create/delete", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const charlieDb = testEnv.authenticatedContext("charlie_999").firestore();
+
+  await assertSucceeds(
+    aliceDb.collection("follows").doc(`${ALICE_UID}_${BOB_UID}`).set({
+      followerId: ALICE_UID,
+      targetId: BOB_UID,
+      createdAt: ts(),
+    })
+  );
+
+  // Charlie can inspect Alice's following list and Bob's followers list
+  await assertSucceeds(
+    charlieDb.collection("follows").where("followerId", "==", ALICE_UID).get()
+  );
+  await assertSucceeds(
+    charlieDb.collection("follows").where("targetId", "==", BOB_UID).get()
+  );
+
+  // Charlie/Bob cannot delete or spoof Alice's follow edge
+  await assertFails(
+    bobDb.collection("follows").doc(`${ALICE_UID}_${BOB_UID}`).delete()
+  );
+  await assertFails(
+    charlieDb.collection("follows").doc(`${ALICE_UID}_charlie_999`).set({
+      followerId: ALICE_UID,
+      targetId: "charlie_999",
+      createdAt: ts(),
+    })
+  );
+});
+
+test("Reels with video + music metadata: valid metadata succeeds, oversized music field fails, ordinary user blocked from admin collections", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID, {
+    email: "alice@example.com",
+    email_verified: true,
+  }).firestore();
+
+  await assertSucceeds(
+    aliceDb.collection("posts").doc("reel_music_1").set({
+      authorId: ALICE_UID,
+      authorUsername: "alice_w",
+      authorName: "Alice Wonder",
+      mediaType: "video",
+      videoUri: "file:///data/user/0/com.darlingdate.app/files/reels/clip_1.mp4",
+      videoDurationMs: 14500,
+      musicTrackId: "golden_hour",
+      musicTitle: "Golden Hour Glow",
+      musicArtist: "Darling Studio",
+      muteOriginalAudio: true,
+      caption: "Evening walk with music!",
+      likesCount: 0,
+      commentsCount: 0,
+      isReel: true,
+      status: "active",
+      createdAt: ts(),
+      updatedAt: ts(),
+    })
+  );
+
+  // Oversized musicTitle > 100 chars must fail schema validation
+  await assertFails(
+    aliceDb.collection("posts").doc("reel_bad_music").set({
+      authorId: ALICE_UID,
+      authorUsername: "alice_w",
+      authorName: "Alice Wonder",
+      mediaType: "video",
+      musicTitle: "x".repeat(120),
+      likesCount: 0,
+      commentsCount: 0,
+      isReel: true,
+      status: "active",
+      createdAt: ts(),
+      updatedAt: ts(),
+    })
+  );
+
+  // Ordinary user must NEVER be able to grant themselves admin or write admin_logs
+  await assertFails(
+    aliceDb.collection("admins").doc(ALICE_UID).set({
+      userId: ALICE_UID,
+      email: "alice@example.com",
+      displayName: "Fake Admin",
+      grantedBy: "self",
+      createdAt: ts(),
+    })
+  );
+  await assertFails(
+    aliceDb.collection("admin_logs").doc("fake_log").set({
+      adminId: ALICE_UID,
+      adminEmail: "alice@example.com",
+      action: "SELF_PROMOTE",
+      targetType: "user",
+      targetId: ALICE_UID,
+      details: "Attempted intrusion",
+      createdAt: ts(),
+    })
+  );
+});
+

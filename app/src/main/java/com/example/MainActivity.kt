@@ -278,7 +278,7 @@ private fun SessionCheckingScreen() {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Verifying your session & role permissions...",
+                text = "Loading your Darling Date experience...",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -33,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +62,7 @@ fun UserMessagesTab(
     currentUserId: String,
     activeChatPartner: PublicProfile?,
     onSelectPartner: (PublicProfile?) -> Unit,
+    onVisitUser: (String) -> Unit,
     viewModel: UserPanelViewModel
 ) {
     val profilesState by viewModel.profilesState.collectAsStateWithLifecycle()
@@ -73,6 +79,7 @@ fun UserMessagesTab(
             currentUserId = currentUserId,
             partner = activeChatPartner,
             viewModel = viewModel,
+            onVisitPartner = { onVisitUser(activeChatPartner.userId) },
             onBack = { onSelectPartner(null) }
         )
         return
@@ -263,11 +270,26 @@ private fun DirectChatView(
     currentUserId: String,
     partner: PublicProfile,
     viewModel: UserPanelViewModel,
+    onVisitPartner: () -> Unit,
     onBack: () -> Unit
 ) {
     val messages by viewModel.observeMessages(partner.userId)
         .collectAsStateWithLifecycle(initialValue = emptyList())
     var draft by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    val sendCurrentDraft: () -> Unit = {
+        if (draft.isNotBlank()) {
+            viewModel.sendMessage(partner.userId, draft)
+            draft = ""
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Surface(tonalElevation = 2.dp) {
@@ -280,21 +302,31 @@ private fun DirectChatView(
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to messages")
                 }
-                AvatarCircle(
-                    avatarUrl = partner.avatarUrl,
-                    displayName = partner.fullName,
-                    size = 38.dp
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(partner.fullName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text("@${partner.username}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClick = onVisitPartner)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    AvatarCircle(
+                        avatarUrl = partner.avatarUrl,
+                        displayName = partner.fullName,
+                        size = 38.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(partner.fullName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("@${partner.username} • Tap to view profile", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
         HorizontalDivider()
 
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -344,16 +376,16 @@ private fun DirectChatView(
                     value = draft,
                     onValueChange = { draft = it.take(1000) },
                     placeholder = { Text("Write a message...") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { sendCurrentDraft() }),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("chat_message_input")
                 )
                 IconButton(
-                    onClick = {
-                        if (draft.isNotBlank()) {
-                            viewModel.sendMessage(partner.userId, draft)
-                            draft = ""
-                        }
-                    }
+                    onClick = sendCurrentDraft,
+                    modifier = Modifier.testTag("chat_send_button")
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send message", tint = DarlingRose)
                 }

@@ -263,6 +263,162 @@ class DarlingDateRuleTest : FirestoreEmulatorTestBase() {
         assertFalse("Unverified email token must not grant admin role", isAdmin)
     }
 
+    @Test
+    fun socialGraph_anyUserCanViewFollowersAndFollowing_butCannotForgeOthersFollows() = runBlocking {
+        val suffix = UUID.randomUUID().toString().take(8)
+        val aliceUid = signInTestUser("alice_sg_$suffix@test.com")
+        val aliceRepo = AuthProfileRepository(firestore, auth)
+        aliceRepo.completeRegistration(
+            fullName = "Alice Social",
+            username = "alice_sg_$suffix",
+            dateOfBirth = "1998-03-10",
+            gender = "Woman",
+            avatarUrl = null,
+            bio = "Hiking",
+            lookingFor = "Meaningful Connection",
+            interests = listOf("Travel"),
+            rememberMe = true,
+            termsAccepted = true
+        ).getOrThrow()
+
+        val bobUid = signInTestUser("bob_sg_$suffix@test.com")
+        val bobRepo = AuthProfileRepository(firestore, auth)
+        bobRepo.completeRegistration(
+            fullName = "Bob Social",
+            username = "bob_sg_$suffix",
+            dateOfBirth = "1996-06-15",
+            gender = "Man",
+            avatarUrl = null,
+            bio = "Coffee",
+            lookingFor = "Casual Dates",
+            interests = listOf("Coffee"),
+            rememberMe = true,
+            termsAccepted = true
+        ).getOrThrow()
+
+        // Alice follows Bob
+        signInTestUser("alice_sg_$suffix@test.com")
+        withTimeout(TIMEOUT_MS) {
+            aliceRepo.toggleFollow(bobUid, currentlyFollowing = false).getOrThrow()
+        }
+
+        // Charlie signs in and visits Alice & Bob's followers/following lists
+        signInTestUser("charlie_sg_$suffix@test.com")
+        val charlieRepo = AuthProfileRepository(firestore, auth)
+        val aliceFollowing = withTimeout(FLOW_TIMEOUT_MS) {
+            charlieRepo.observeFollowingIds(aliceUid).first { it.contains(bobUid) }
+        }
+        assertTrue(aliceFollowing.contains(bobUid))
+
+        val bobFollowers = withTimeout(FLOW_TIMEOUT_MS) {
+            charlieRepo.observeFollowerIds(bobUid).first { it.contains(aliceUid) }
+        }
+        assertTrue(bobFollowers.contains(aliceUid))
+
+        // Charlie cannot forge a follow edge on behalf of Alice or delete Alice's follow edge
+        val forgeErr = runCatching {
+            withTimeout(TIMEOUT_MS) {
+                firestore.collection("follows").document("${aliceUid}_${bobUid}_forged").set(
+                    mapOf(
+                        "followerId" to aliceUid,
+                        "targetId" to bobUid,
+                        "createdAt" to com.google.firebase.Timestamp.now()
+                    )
+                ).await()
+            }
+        }.exceptionOrNull()
+        val fsForgeErr = checkNotNull(forgeErr?.unwrapFirestoreException()) {
+            "Expected PERMISSION_DENIED when forging follow edge, got $forgeErr"
+        }
+        assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, fsForgeErr.code)
+
+        val deleteErr = runCatching {
+            withTimeout(TIMEOUT_MS) {
+                firestore.collection("follows").document("${aliceUid}_$bobUid").delete().await()
+            }
+        }.exceptionOrNull()
+        val fsDeleteErr = checkNotNull(deleteErr?.unwrapFirestoreException()) {
+            "Expected PERMISSION_DENIED when deleting another user's follow edge, got $deleteErr"
+        }
+        assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, fsDeleteErr.code)
+    }
+
+    @Test
+    fun socialFeed_createVideoReelWithMusic_andOrdinaryUserCannotWriteAdminCollections() = runBlocking {
+        val suffix = UUID.randomUUID().toString().take(8)
+        val uid = signInVerifiedTestUser("reel_user_$suffix@test.com")
+        val authRepo = AuthProfileRepository(firestore, auth)
+        authRepo.completeRegistration(
+            fullName = "Reel Creator",
+            username = "creator_$suffix",
+            dateOfBirth = "1997-11-11",
+            gender = "Woman",
+            avatarUrl = null,
+            bio = "Music lover",
+            lookingFor = "Meaningful Connection",
+            interests = listOf("Music", "Travel"),
+            rememberMe = true,
+            termsAccepted = true
+        ).getOrThrow()
+
+        val feedRepo = SocialFeedRepository(firestore, auth)
+        val author = PublicProfile(
+            id = uid,
+            userId = uid,
+            fullName = "Reel Creator",
+            username = "creator_$suffix"
+        )
+
+        val reelId = withTimeout(TIMEOUT_MS) {
+            feedRepo.createPost(
+                author = author,
+                caption = "Sunset Reel $suffix",
+                mediaType = "video",
+                mediaData = null,
+                location = "Dhaka",
+                isReel = true,
+                videoUri = "file:///data/user/0/com.darlingdate.app/files/reels/test_$suffix.mp4",
+                videoDurationMs = 18000L,
+                musicTrackId = "golden_hour",
+                musicTitle = "Golden Hour Glow",
+                musicArtist = "Darling Studio",
+                muteOriginalAudio = true
+            ).getOrThrow()
+        }
+        assertTrue(reelId.isNotBlank())
+
+        val posts = withTimeout(FLOW_TIMEOUT_MS) {
+            feedRepo.observeActivePosts().first { list -> list.any { it.id == reelId } }
+        }
+        val createdReel = posts.first { it.id == reelId }
+        assertTrue(createdReel.isReel)
+        assertEquals("video", createdReel.mediaType)
+        assertEquals("golden_hour", createdReel.musicTrackId)
+        assertEquals("Golden Hour Glow", createdReel.musicTitle)
+        assertEquals("Darling Studio", createdReel.musicArtist)
+        assertEquals(18000L, createdReel.videoDurationMs)
+        assertTrue(createdReel.muteOriginalAudio)
+
+        // Ordinary user cannot write to /admins or /admin_logs
+        val adminGrantErr = runCatching {
+            withTimeout(TIMEOUT_MS) {
+                firestore.collection("admins").document(uid).set(
+                    mapOf(
+                        "userId" to uid,
+                        "email" to "reel_user_$suffix@test.com",
+                        "displayName" to "Unauthorized",
+                        "grantedBy" to "self",
+                        "createdAt" to com.google.firebase.Timestamp.now()
+                    )
+                ).await()
+            }
+        }.exceptionOrNull()
+        val fsAdminErr = checkNotNull(adminGrantErr?.unwrapFirestoreException()) {
+            "Expected PERMISSION_DENIED writing /admins as ordinary user, got $adminGrantErr"
+        }
+        assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, fsAdminErr.code)
+    }
+
     private companion object {
         const val TIMEOUT_MS = 5000L
         const val FLOW_TIMEOUT_MS = 3000L

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -93,7 +94,8 @@ fun UserFeedTab(
     viewModel: UserPanelViewModel,
     onOpenCreatePost: () -> Unit,
     onOpenCreateStory: () -> Unit,
-    onOpenEditProfile: () -> Unit
+    onOpenEditProfile: () -> Unit,
+    onVisitUser: (String) -> Unit
 ) {
     val postsState by viewModel.postsState.collectAsStateWithLifecycle()
     val storiesState by viewModel.storiesState.collectAsStateWithLifecycle()
@@ -222,6 +224,7 @@ fun UserFeedTab(
                             SuggestedPersonCard(
                                 profile = person,
                                 isFollowing = followingIds.contains(person.userId),
+                                onCardClick = { onVisitUser(person.userId) },
                                 onFollowToggle = { viewModel.toggleFollow(person.userId) }
                             )
                         }
@@ -290,6 +293,7 @@ fun UserFeedTab(
                             isOwnPost = post.authorId == currentUserId,
                             isLiked = likedIds.contains(post.id),
                             isSaved = savedIds.contains(post.id),
+                            onAuthorClick = { onVisitUser(post.authorId) },
                             onLikeClick = { viewModel.toggleLike(post.id) },
                             onCommentClick = { commentsTargetPost = post },
                             onBookmarkClick = { viewModel.toggleBookmark(post.id) },
@@ -344,7 +348,17 @@ fun UserFeedTab(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                val targetId = story.authorId
+                                activeStory = null
+                                onVisitUser(targetId)
+                            }
+                            .padding(4.dp)
+                    ) {
                         AvatarCircle(
                             avatarUrl = story.authorAvatar,
                             displayName = story.authorName,
@@ -411,6 +425,7 @@ fun UserFeedTab(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .imePadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
@@ -436,6 +451,10 @@ fun UserFeedTab(
                         items(comments, key = { it.id }) { comment ->
                             CommentRow(
                                 comment = comment,
+                                onAuthorClick = {
+                                    commentsTargetPost = null
+                                    onVisitUser(comment.authorId)
+                                },
                                 onReport = {
                                     reportTarget = Triple("comment", comment.id, comment.authorId)
                                 }
@@ -562,10 +581,13 @@ private fun ChecklistItem(label: String, done: Boolean) {
 private fun SuggestedPersonCard(
     profile: PublicProfile,
     isFollowing: Boolean,
+    onCardClick: () -> Unit,
     onFollowToggle: () -> Unit
 ) {
     Card(
-        modifier = Modifier.width(156.dp),
+        modifier = Modifier
+            .width(156.dp)
+            .clickable(onClick = onCardClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
     ) {
@@ -619,6 +641,7 @@ fun PostFeedCard(
     isOwnPost: Boolean,
     isLiked: Boolean,
     isSaved: Boolean,
+    onAuthorClick: () -> Unit,
     onLikeClick: () -> Unit,
     onCommentClick: () -> Unit,
     onBookmarkClick: () -> Unit,
@@ -644,7 +667,13 @@ fun PostFeedCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onAuthorClick)
+                    .padding(end = 8.dp)
+            ) {
                 AvatarCircle(
                     avatarUrl = post.authorAvatar,
                     displayName = post.authorName,
@@ -696,15 +725,71 @@ fun PostFeedCard(
             }
         }
 
-        if (!post.mediaData.isNullOrBlank()) {
-            DarlingMediaImage(
-                mediaDataOrUrl = post.mediaData,
-                contentDescription = post.caption,
-                contentScale = ContentScale.Crop,
+        val hasPlayableMedia = !post.videoUri.isNullOrBlank() || !post.mediaData.isNullOrBlank()
+        var playInlineMedia by remember(post.id) { mutableStateOf(false) }
+
+        if (!post.videoUri.isNullOrBlank()) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(4f / 3f)
-            )
+                    .clickable { playInlineMedia = !playInlineMedia }
+            ) {
+                com.example.ui.components.DarlingReelMediaStage(
+                    videoUri = post.videoUri,
+                    fallbackMediaData = post.mediaData,
+                    fallbackText = post.caption,
+                    musicTrackId = post.musicTrackId,
+                    isActive = playInlineMedia,
+                    isUserPaused = !playInlineMedia,
+                    isMuted = false,
+                    muteOriginalVideoAudio = post.muteOriginalAudio,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (!post.musicTitle.isNullOrBlank()) {
+                    com.example.ui.components.MusicTrackPill(
+                        title = post.musicTitle,
+                        artist = post.musicArtist ?: "Music",
+                        isPlaying = playInlineMedia,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(10.dp)
+                    )
+                }
+            }
+        } else if (!post.mediaData.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(4f / 3f)
+                    .clickable(enabled = !post.musicTrackId.isNullOrBlank()) {
+                        playInlineMedia = !playInlineMedia
+                    }
+            ) {
+                DarlingMediaImage(
+                    mediaDataOrUrl = post.mediaData,
+                    contentDescription = post.caption,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (!post.musicTrackId.isNullOrBlank()) {
+                    val track = com.example.data.util.MusicCatalog.findById(post.musicTrackId)
+                    com.example.ui.components.BackgroundMusicEffect(
+                        rawResId = track?.rawResId,
+                        isPlaying = playInlineMedia
+                    )
+                }
+                if (!post.musicTitle.isNullOrBlank()) {
+                    com.example.ui.components.MusicTrackPill(
+                        title = post.musicTitle,
+                        artist = post.musicArtist ?: "Music",
+                        isPlaying = playInlineMedia,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(10.dp)
+                    )
+                }
+            }
         } else {
             Box(
                 modifier = Modifier
@@ -715,11 +800,26 @@ fun PostFeedCard(
                     .padding(24.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = post.caption,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = post.caption,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White
+                    )
+                    if (!post.musicTitle.isNullOrBlank()) {
+                        val track = com.example.data.util.MusicCatalog.findById(post.musicTrackId)
+                        com.example.ui.components.BackgroundMusicEffect(
+                            rawResId = track?.rawResId,
+                            isPlaying = playInlineMedia
+                        )
+                        com.example.ui.components.MusicTrackPill(
+                            title = post.musicTitle,
+                            artist = post.musicArtist ?: "Music",
+                            isPlaying = playInlineMedia,
+                            modifier = Modifier.clickable { playInlineMedia = !playInlineMedia }
+                        )
+                    }
+                }
             }
         }
 
@@ -788,6 +888,7 @@ fun PostFeedCard(
 @Composable
 private fun CommentRow(
     comment: Comment,
+    onAuthorClick: () -> Unit,
     onReport: () -> Unit
 ) {
     Row(
@@ -796,7 +897,11 @@ private fun CommentRow(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onAuthorClick)
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
