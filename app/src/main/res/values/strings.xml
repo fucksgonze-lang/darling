@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Darling Date</string>
+    <string name="tagline">Meet, share moments, and spark real connections.</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="remember_me">Remember me on this device</string>
+    <string name="create_new_account">Create New Account</string>
+    <string name="already_have_account">Already have an account? Log In</string>
+    <string name="terms_acceptance">I agree to the Terms of Service and Privacy Policy (18+)</string>
+    <string name="access_denied_title">Access Denied</string>
+    <string name="access_denied_message">Administrator privileges are strictly restricted to server-authorized accounts. This incident has been noted.</string>
+    <string name="account_restricted_title">Account Restricted</string>
+    <string name="sign_out">Sign Out</string>
+</resources>
